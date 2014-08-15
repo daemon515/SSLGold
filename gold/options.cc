@@ -1096,6 +1096,7 @@ General_options::finalize()
   if (this->nmagic() || this->omagic())
     this->set_static(true);
 
+   fprintf(stderr, "PLT rand size is %d \n", this->plt_rand_size());
   // If --thread_count is specified, it applies to
   // --thread-count-{initial,middle,final}, though it doesn't override
   // them.

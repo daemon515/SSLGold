@@ -146,6 +146,8 @@ main(int argc, char** argv)
   bindtextdomain(PACKAGE, LOCALEDIR);
   textdomain(PACKAGE);
 
+  fprintf(stderr, "Debug version of gold linker with plt rand size\n");
+
   program_name = argv[0];
 
   // In libiberty; expands @filename to the args in "filename".

@@ -306,7 +306,7 @@ class Output_data_plt_x86_64_standard : public Output_data_plt_x86_64<size>
 				  Output_data_got<64, false>* got,
 				  Output_data_space* got_plt,
 				  Output_data_space* got_irelative)
-    : Output_data_plt_x86_64<size>(layout, plt_entry_size,
+    : Output_data_plt_x86_64<size>(layout, parameters->options().plt_rand_size() + plt_entry_size,
 				   got, got_plt, got_irelative)
   { }
 
@@ -315,7 +315,7 @@ class Output_data_plt_x86_64_standard : public Output_data_plt_x86_64<size>
 				  Output_data_space* got_plt,
 				  Output_data_space* got_irelative,
 				  unsigned int plt_count)
-    : Output_data_plt_x86_64<size>(layout, plt_entry_size,
+    : Output_data_plt_x86_64<size>(layout, parameters->options().plt_rand_size() + plt_entry_size,
 				   got, got_plt, got_irelative,
 				   plt_count)
   { }
@@ -323,7 +323,7 @@ class Output_data_plt_x86_64_standard : public Output_data_plt_x86_64<size>
  protected:
   virtual unsigned int
   do_get_plt_entry_size() const
-  { return plt_entry_size; }
+  { return plt_entry_size + parameters->options().plt_rand_size(); }
 
   virtual void
   do_add_eh_frame(Layout* layout)
@@ -1221,7 +1221,7 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
       // Note that when setting the PLT offset for a non-IRELATIVE
       // entry we skip the initial reserved PLT entry.
       plt_index = *pcount + offset;
-      plt_offset = plt_index * this->get_plt_entry_size();
+      plt_offset = plt_index * this->get_plt_entry_size() + parameters->options().plt_pre_rand_size();
 
       ++*pcount;
 
@@ -1237,6 +1237,8 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
     {
       // FIXME: This is probably not correct for IRELATIVE relocs.
 
+      if (parameters->options().plt_rand_size() > 0)
+          fprintf(stderr, "Have not handled plt offset change here");
       // For incremental updates, find an available slot.
       plt_offset = this->free_list_.allocate(this->get_plt_entry_size(),
 					     this->get_plt_entry_size(), 0);
@@ -1433,14 +1435,39 @@ Output_data_plt_x86_64_standard<size>::do_fill_first_plt_entry(
     typename elfcpp::Elf_types<size>::Elf_Addr got_address,
     typename elfcpp::Elf_types<size>::Elf_Addr plt_address)
 {
-  memcpy(pov, first_plt_entry, plt_entry_size);
+  int i = 0;
+  const unsigned char ud2_val[2] = {0x0F, 0x0B};
+  const unsigned char hlt_val[1] = {0xF4};
+
+  int pre_rand_size = parameters->options().plt_pre_rand_size();
+  while (i+2 <=  pre_rand_size){
+    memcpy(pov+i, ud2_val, 2);
+    i += 2;
+  }
+  if (i < pre_rand_size){
+    memcpy(pov+i, hlt_val, 1);
+    i += 1;
+  }
+
+  memcpy(pov+i, first_plt_entry, plt_entry_size);
+  int plt_size = parameters->options().plt_rand_size();
+
+  while (i+2 <=  plt_size){
+    memcpy(pov+plt_entry_size+i, ud2_val, 2);
+    i += 2;
+  }
+  if (i < plt_size){
+    memcpy(pov+plt_entry_size+i, hlt_val, 1);
+    i++;
+  }
+
   // We do a jmp relative to the PC at the end of this instruction.
-  elfcpp::Swap_unaligned<32, false>::writeval(pov + 2,
+  elfcpp::Swap_unaligned<32, false>::writeval(pov + 2 + pre_rand_size,
 					      (got_address + 8
-					       - (plt_address + 6)));
-  elfcpp::Swap<32, false>::writeval(pov + 8,
+					       - (plt_address + 6 + pre_rand_size)));
+  elfcpp::Swap<32, false>::writeval(pov + 8 + pre_rand_size,
 				    (got_address + 16
-				     - (plt_address + 12)));
+				     - (plt_address + 12 + pre_rand_size)));
 }
 
 // Subsequent entries in the PLT for an executable.
@@ -1468,17 +1495,43 @@ Output_data_plt_x86_64_standard<size>::do_fill_plt_entry(
     unsigned int plt_offset,
     unsigned int plt_index)
 {
-  memcpy(pov, plt_entry, plt_entry_size);
-  elfcpp::Swap_unaligned<32, false>::writeval(pov + 2,
+  int i = 0;
+  const unsigned char ud2_val[2] = {0x0F, 0x0B};
+  const unsigned char hlt_val[1] = {0xF4};
+
+  int pre_rand_size = parameters->options().plt_pre_rand_size();
+  while (i+2 <= pre_rand_size){
+    memcpy(pov+i, ud2_val, 2);
+    i += 2;
+  }
+  if (i < pre_rand_size){
+    memcpy(pov+i, hlt_val, 1);
+    i += 1;
+  }
+
+  memcpy(pov+i, plt_entry, plt_entry_size);
+
+  int plt_size = parameters->options().plt_rand_size();
+
+  while (i+2 <= plt_size){
+    memcpy(pov+plt_entry_size+i,ud2_val, 2);
+    i += 2;
+  }
+  if (i < plt_size){
+    memcpy(pov+plt_entry_size+i,hlt_val, 1);
+    i++;
+  }
+ 
+  elfcpp::Swap_unaligned<32, false>::writeval(pov + 2 + pre_rand_size,
 					      (got_address + got_offset
 					       - (plt_address + plt_offset
-						  + 6)));
+						  + 6 + pre_rand_size)));
 
-  elfcpp::Swap_unaligned<32, false>::writeval(pov + 7, plt_index);
-  elfcpp::Swap<32, false>::writeval(pov + 12,
+  elfcpp::Swap_unaligned<32, false>::writeval(pov + 7 + pre_rand_size, plt_index);
+  elfcpp::Swap<32, false>::writeval(pov + 12 + pre_rand_size,
 				    - (plt_offset + plt_entry_size));
 
-  return 6;
+  return 6+pre_rand_size;
 }
 
 // The reserved TLSDESC entry in the PLT for an executable.
