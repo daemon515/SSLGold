@@ -1258,9 +1258,9 @@ class General_options
   DEFINE_string(fuse_ld, options::ONE_DASH, '\0', "",
 		N_("Ignored for GCC linker option compatibility"),
 		"");
-  DEFINE_uint(plt_rand_size, options::TWO_DASHES, '\0', 16,
+  DEFINE_uint(plt_rand_size, options::TWO_DASHES, '\0', 0,
 	      N_("Total size of plt entry to use"), N_("COUNT"));
-  DEFINE_uint(plt_pre_rand_size, options::TWO_DASHES, '\0', 4,
+  DEFINE_uint(plt_pre_rand_size, options::TWO_DASHES, '\0', 0,
 	      N_("Total size of plt entry to use"), N_("COUNT"));
   // The -z options.
 
