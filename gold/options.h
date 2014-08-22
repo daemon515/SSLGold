@@ -1259,9 +1259,7 @@ class General_options
 		N_("Ignored for GCC linker option compatibility"),
 		"");
   DEFINE_uint(plt_rand_size, options::TWO_DASHES, '\0', 0,
-	      N_("Total size of plt entry to use"), N_("COUNT"));
-  DEFINE_uint(plt_pre_rand_size, options::TWO_DASHES, '\0', 0,
-	      N_("Total size of plt entry to use"), N_("COUNT"));
+	      N_("Increased size of plt entry to use"), N_("COUNT"));
   // The -z options.
 
   DEFINE_bool(combreloc, options::DASH_Z, '\0', true,

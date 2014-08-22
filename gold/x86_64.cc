@@ -260,6 +260,8 @@ class Output_data_plt_x86_64 : public Output_section_data
   static const int plt_eh_frame_cie_size = 16;
   static const unsigned char plt_eh_frame_cie[plt_eh_frame_cie_size];
 
+  //A vector that maintains the random start offset for each PLT entry. Indexed by plt entry index
+  std::vector<int> pltStartOffset;
  private:
   // Set the final size.
   void
@@ -1221,7 +1223,14 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
       // Note that when setting the PLT offset for a non-IRELATIVE
       // entry we skip the initial reserved PLT entry.
       plt_index = *pcount + offset;
-      plt_offset = plt_index * this->get_plt_entry_size() + parameters->options().plt_pre_rand_size();
+      if (parameters->options().plt_rand_size() > 0){
+          this->pltStartOffset.insert(this->pltStartOffset.end(), rand() % parameters->options().plt_rand_size() + 1);
+      } else {
+          this->pltStartOffset.insert(this->pltStartOffset.end(), 0);
+      }
+      plt_offset = plt_index * this->get_plt_entry_size() + this->pltStartOffset.at(plt_index-offset);
+//gold_debug(DEBUG_SCRIPT, _("Size of vector %ld and value at '%d' is %d"), this->pltStartOffset.size(), plt_index-offset, this->pltStartOffset.at(plt_index-offset));
+
 
       ++*pcount;
 
@@ -1236,9 +1245,7 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
   else
     {
       // FIXME: This is probably not correct for IRELATIVE relocs.
-
-      if (parameters->options().plt_rand_size() > 0)
-          fprintf(stderr, "Have not handled plt offset change here");
+      fprintf(stderr, "TODO: Test the plt offset changes for incremental updates SAJO");
       // For incremental updates, find an available slot.
       plt_offset = this->free_list_.allocate(this->get_plt_entry_size(),
 					     this->get_plt_entry_size(), 0);
@@ -1435,39 +1442,15 @@ Output_data_plt_x86_64_standard<size>::do_fill_first_plt_entry(
     typename elfcpp::Elf_types<size>::Elf_Addr got_address,
     typename elfcpp::Elf_types<size>::Elf_Addr plt_address)
 {
-  int i = 0;
-  const unsigned char ud2_val[2] = {0x0F, 0x0B};
-  const unsigned char hlt_val[1] = {0xF4};
-
-  int pre_rand_size = parameters->options().plt_pre_rand_size();
-  while (i+2 <=  pre_rand_size){
-    memcpy(pov+i, ud2_val, 2);
-    i += 2;
-  }
-  if (i < pre_rand_size){
-    memcpy(pov+i, hlt_val, 1);
-    i += 1;
-  }
-
-  memcpy(pov+i, first_plt_entry, plt_entry_size);
-  int plt_size = parameters->options().plt_rand_size();
-
-  while (i+2 <=  plt_size){
-    memcpy(pov+plt_entry_size+i, ud2_val, 2);
-    i += 2;
-  }
-  if (i < plt_size){
-    memcpy(pov+plt_entry_size+i, hlt_val, 1);
-    i++;
-  }
+  memcpy(pov, first_plt_entry, plt_entry_size);
 
   // We do a jmp relative to the PC at the end of this instruction.
-  elfcpp::Swap_unaligned<32, false>::writeval(pov + 2 + pre_rand_size,
+  elfcpp::Swap_unaligned<32, false>::writeval(pov + 2,
 					      (got_address + 8
-					       - (plt_address + 6 + pre_rand_size)));
-  elfcpp::Swap<32, false>::writeval(pov + 8 + pre_rand_size,
+					       - (plt_address + 6)));
+  elfcpp::Swap<32, false>::writeval(pov + 8,
 				    (got_address + 16
-				     - (plt_address + 12 + pre_rand_size)));
+				     - (plt_address + 12)));
 }
 
 // Subsequent entries in the PLT for an executable.
@@ -1499,7 +1482,9 @@ Output_data_plt_x86_64_standard<size>::do_fill_plt_entry(
   const unsigned char ud2_val[2] = {0x0F, 0x0B};
   const unsigned char hlt_val[1] = {0xF4};
 
-  int pre_rand_size = parameters->options().plt_pre_rand_size();
+  int pre_rand_size = this->pltStartOffset.at(plt_index);
+//gold_debug(DEBUG_SCRIPT, _("Size of vector %ld and store is '%d' at index %d"), this->pltStartOffset.size(), pre_rand_size, plt_index);
+  
   while (i+2 <= pre_rand_size){
     memcpy(pov+i, ud2_val, 2);
     i += 2;
@@ -1529,7 +1514,7 @@ Output_data_plt_x86_64_standard<size>::do_fill_plt_entry(
 
   elfcpp::Swap_unaligned<32, false>::writeval(pov + 7 + pre_rand_size, plt_index);
   elfcpp::Swap<32, false>::writeval(pov + 12 + pre_rand_size,
-				    - (plt_offset + plt_entry_size));
+				    - (plt_offset + plt_entry_size + pre_rand_size));
 
   return 6+pre_rand_size;
 }
