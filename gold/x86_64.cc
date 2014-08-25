@@ -1223,14 +1223,14 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
       // Note that when setting the PLT offset for a non-IRELATIVE
       // entry we skip the initial reserved PLT entry.
       plt_index = *pcount + offset;
+      plt_offset = plt_index * this->get_plt_entry_size();
+
       if (parameters->options().plt_rand_size() > 0){
           this->pltStartOffset.insert(this->pltStartOffset.end(), rand() % parameters->options().plt_rand_size() + 1);
-      } else {
-          this->pltStartOffset.insert(this->pltStartOffset.end(), 0);
-      }
-      plt_offset = plt_index * this->get_plt_entry_size() + this->pltStartOffset.at(plt_index-offset);
+          plt_offset += this->pltStartOffset.at(plt_index-offset);
 //gold_debug(DEBUG_SCRIPT, _("Size of vector %ld and value at '%d' is %d"), this->pltStartOffset.size(), plt_index-offset, this->pltStartOffset.at(plt_index-offset));
 
+      }
 
       ++*pcount;
 
@@ -1261,6 +1261,8 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
     }
 
   gsym->set_plt_offset(plt_offset);
+
+//gold_debug(DEBUG_SCRIPT, _("Symbol '%s' is at plt offset '%ld'"), gsym->name(), plt_offset);
 
   // Every PLT entry needs a reloc.
   this->add_relocation(symtab, layout, gsym, got_offset);
@@ -1482,9 +1484,12 @@ Output_data_plt_x86_64_standard<size>::do_fill_plt_entry(
   const unsigned char ud2_val[2] = {0x0F, 0x0B};
   const unsigned char hlt_val[1] = {0xF4};
 
-  int pre_rand_size = this->pltStartOffset.at(plt_index);
+  int pre_rand_size = 0;
+  if (parameters->options().plt_rand_size() > 0){
+      pre_rand_size = this->pltStartOffset.at(plt_index);
 //gold_debug(DEBUG_SCRIPT, _("Size of vector %ld and store is '%d' at index %d"), this->pltStartOffset.size(), pre_rand_size, plt_index);
-  
+  }
+
   while (i+2 <= pre_rand_size){
     memcpy(pov+i, ud2_val, 2);
     i += 2;
