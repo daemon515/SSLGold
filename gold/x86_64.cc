@@ -262,6 +262,11 @@ class Output_data_plt_x86_64 : public Output_section_data
 
   //A vector that maintains the random start offset for each PLT entry. Indexed by plt entry index
   std::vector<int> pltStartOffset;
+  //std::vector<Symbol*> gSymList;
+
+  bool* indexused;
+  unsigned int* pltIndexList;
+  Symbol** symRefList;
  private:
   // Set the final size.
   void
@@ -1202,6 +1207,15 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
   unsigned int offset;
   unsigned int reserved;
   Output_data_space* got;
+  unsigned int listsize = parameters->options().plt_entry_count();
+  if ((listsize > 0) && (this->pltIndexList == NULL)){
+    srand(time(NULL));
+    this->indexused = new bool[listsize];
+    this->pltIndexList = new unsigned int[listsize];
+    this->symRefList = new Symbol*[listsize];
+    for (unsigned int i = 0; i < listsize; i++)
+      this->indexused[i] = 0;
+  }
   if (gsym->type() == elfcpp::STT_GNU_IFUNC
       && gsym->can_use_relative_reloc(false))
     {
@@ -1209,6 +1223,7 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
       offset = 0;
       reserved = 0;
       got = this->got_irelative_;
+      plt_index = *pcount + offset;
     }
   else
     {
@@ -1216,13 +1231,29 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
       offset = 1;
       reserved = 3;
       got = this->got_plt_;
+      if (listsize > 0){
+        int seq = rand() % listsize;
+        while (1){
+          if (this->indexused[seq] == 0){
+            this->indexused[seq] = 1;
+            this->pltIndexList[this->count_] = seq;
+            break;
+          } else {
+            seq = (seq + 1) % listsize;
+          }
+        } 
+        plt_index = this->pltIndexList[this->count_] + 1;
+      } else {
+        plt_index = *pcount + offset;
+      }
     }
 
   if (!this->is_data_size_valid())
     {
       // Note that when setting the PLT offset for a non-IRELATIVE
       // entry we skip the initial reserved PLT entry.
-      plt_index = *pcount + offset;
+      //plt_index = *pcount + offset;
+
       plt_offset = plt_index * this->get_plt_entry_size();
 
       if (parameters->options().plt_rand_size() > 0){
@@ -1235,12 +1266,13 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
       ++*pcount;
 
       got_offset = (plt_index - offset + reserved) * 8;
-      gold_assert(got_offset == got->current_data_size());
+      //gold_assert(got_offset == got->current_data_size());
 
       // Every PLT entry needs a GOT entry which points back to the PLT
       // entry (this will be changed by the dynamic linker, normally
       // lazily when the function is called).
-      got->set_current_data_size(got_offset + 8);
+      if (got->current_data_size() < got_offset + 8)
+          got->set_current_data_size(got_offset + 8);
     }
   else
     {
@@ -1265,7 +1297,18 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
 //gold_debug(DEBUG_SCRIPT, _("Symbol '%s' is at plt offset '%ld'"), gsym->name(), plt_offset);
 
   // Every PLT entry needs a reloc.
-  this->add_relocation(symtab, layout, gsym, got_offset);
+  if (listsize == 0){
+    this->add_relocation(symtab, layout, gsym, got_offset);
+  } else {
+    this->symRefList[plt_index-1] = gsym;
+    if (this->count_ == listsize){
+      for (unsigned int i = 0; i < listsize; i++){
+        Symbol *sym = this->symRefList[i];
+        got_offset = (i + 1 - offset + reserved) * 8;
+        this->add_relocation(symtab, layout, sym, got_offset);
+      }
+    }
+  }
 
   // Note that we don't need to save the symbol.  The contents of the
   // PLT are independent of which symbols are used.  The symbols only
@@ -1665,6 +1708,14 @@ Output_data_plt_x86_64<size>::do_write(Output_file* of)
   unsigned int plt_offset = this->get_plt_entry_size();
   unsigned int got_offset = 24;
   const unsigned int count = this->count_ + this->irelative_count_;
+#if 1
+  unsigned char* got_pov_base = got_pov;
+  unsigned char* pov_base = pov;
+  unsigned int plt_offset_base = plt_offset;
+  unsigned int got_offset_base = got_offset;
+  unsigned int plt_index = 0;
+#endif
+#if 0
   for (unsigned int plt_index = 0;
        plt_index < count;
        ++plt_index,
@@ -1673,6 +1724,19 @@ Output_data_plt_x86_64<size>::do_write(Output_file* of)
 	 plt_offset += this->get_plt_entry_size(),
 	 got_offset += 8)
     {
+#endif
+    for (unsigned int index = 0; index < count; index++)
+    {
+      if (this->pltIndexList != NULL){
+        plt_index = this->pltIndexList[index];
+      }else{
+        plt_index = index;
+      }
+      pov = pov_base + plt_index * this->get_plt_entry_size();
+      got_pov = got_pov_base + plt_index * 8;
+      plt_offset = plt_offset_base + plt_index * this->get_plt_entry_size();
+      got_offset = got_offset_base + plt_index * 8;
+
       // Set and adjust the PLT entry itself.
       unsigned int lazy_offset = this->fill_plt_entry(pov,
 						      got_address, plt_address,
@@ -1683,6 +1747,16 @@ Output_data_plt_x86_64<size>::do_write(Output_file* of)
       elfcpp::Swap<64, false>::writeval(got_pov,
 					plt_address + plt_offset + lazy_offset);
     }
+    if (this->pltIndexList != NULL) 
+      plt_index = parameters->options().plt_entry_count();
+    else
+      plt_index += 1;
+      
+    pov = pov_base + plt_index * this->get_plt_entry_size();
+    got_pov = got_pov_base + plt_index * 8;
+    plt_offset = plt_offset_base + plt_index * this->get_plt_entry_size();
+    got_offset = got_offset_base + plt_index * 8;
+ 
 
   if (this->has_tlsdesc_entry())
     {
