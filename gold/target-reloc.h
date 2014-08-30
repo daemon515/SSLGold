@@ -54,9 +54,8 @@ enum_relocs(
   //const int sym_size = elfcpp::Elf_sizes<size>::sym_size;
   Scan scan;
 
-  fprintf(stderr, "What is prelocs %s\n", prelocs);
   if (plocal_syms != NULL)
-     fprintf(stderr, "There may be locals. We are ignoring them \n");
+    plocal_syms = plocal_syms; 
 
   for (size_t i = 0; i < reloc_count; ++i, prelocs += reloc_size)
     {

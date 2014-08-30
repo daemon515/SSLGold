@@ -190,7 +190,7 @@ class Output_data_plt_x86_64 : public Output_section_data
   set_enumerated_plt_count(int count) 
   {
     this->enumerated_plt_count_ = count;
-    fprintf(stderr, "Setting enumerated count to %d \n", count);
+    //fprintf(stderr, "Setting enumerated count to %d \n", count);
   }
 
   // Return the expected size of the PLT table.
@@ -3424,7 +3424,7 @@ Target_x86_64<size>::enum_relocs(Symbol_table* symtab,
 				 size_t local_symbol_count,
 				 const unsigned char* plocal_symbols)
 {
-  fprintf(stderr, "Call to enum_relocs \n");
+  //fprintf(stderr, "Call to enum_relocs \n");
   if (sh_type == elfcpp::SHT_REL)
     {
       gold_error(_("%s: unsupported REL reloc section"),
