@@ -222,6 +222,16 @@ queue_middle_gc_tasks(const General_options&,
                       Workqueue*,
                       Mapfile*);
 
+// Queue up the barrier set of tasks.
+extern void
+queue_barrier_tasks(const General_options&,
+		   const Task*,
+		   const Input_objects*,
+		   Symbol_table*,
+		   Layout*,
+		   Workqueue*,
+		   Mapfile*);
+
 // Queue up the middle set of tasks.
 extern void
 queue_middle_tasks(const General_options&,

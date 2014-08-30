@@ -85,10 +85,18 @@ Read_relocs::run(Workqueue* workqueue)
     }
   else
     {
-      workqueue->queue_next(new Scan_relocs(this->symtab_, this->layout_,
+      if (! this->bEnumerate_){
+ 
+          workqueue->queue_next(new Scan_relocs(this->symtab_, this->layout_,
+  					    this->object_, rd,
+                                            this->this_blocker_,
+					    this->next_blocker_));
+        } else {
+          workqueue->queue_next(new Enum_relocs(this->symtab_, this->layout_,
 					    this->object_, rd,
                                             this->this_blocker_,
 					    this->next_blocker_));
+        }
     }
 }
 
@@ -143,6 +151,58 @@ std::string
 Gc_process_relocs::get_name() const
 {
   return "Gc_process_relocs " + this->object_->name();
+}
+
+// Enum_relocs methods.
+
+Enum_relocs::~Enum_relocs()
+{
+  if (this->this_blocker_ != NULL)
+    delete this->this_blocker_;
+}
+
+// These tasks enum the relocations read by Read_relocs and mark up
+// the symbol table to indicate which relocations are required.  We
+// use a lock on the symbol table to keep them from interfering with
+// each other.
+
+Task_token*
+Enum_relocs::is_runnable()
+{
+  if (this->this_blocker_ != NULL && this->this_blocker_->is_blocked())
+    return this->this_blocker_;
+  if (this->object_->is_locked())
+    return this->object_->token();
+  return NULL;
+}
+
+// Return the locks we hold: one on the file, one on the symbol table
+// and one blocker.
+
+void
+Enum_relocs::locks(Task_locker* tl)
+{
+  Task_token* token = this->object_->token();
+  if (token != NULL)
+    tl->add(this, token);
+  tl->add(this, this->next_blocker_);
+}
+
+// Enum the relocs.
+
+void
+Enum_relocs::run(Workqueue* )
+{
+  this->object_->enum_relocs(this->symtab_, this->layout_, this->rd_);
+  this->object_->release();
+}
+
+// Return a debugging name for the task.
+
+std::string
+Enum_relocs::get_name() const
+{
+  return "Enum_relocs " + this->object_->name();
 }
 
 // Scan_relocs methods.
@@ -414,6 +474,83 @@ Sized_relobj_file<size, big_endian>::do_gc_process_relocs(Symbol_table* symtab,
                                         this->local_symbol_count_, 
                                         local_symbols);
         }
+    }
+}
+
+
+// Enum the relocs and do nothing to the symbol table.  This looks for
+// relocations which require GOT/PLT/COPY relocations and counts them all
+
+template<int size, bool big_endian>
+void
+Sized_relobj_file<size, big_endian>::do_enum_relocs(Symbol_table* symtab,
+					       Layout* layout,
+					       Read_relocs_data* rd)
+{
+  Sized_target<size, big_endian>* target =
+    parameters->sized_target<size, big_endian>();
+
+  const unsigned char* local_symbols;
+  if (rd->local_symbols == NULL)
+    local_symbols = NULL;
+  else
+    local_symbols = rd->local_symbols->data();
+
+  // For incremental links, allocate the counters for incremental relocations.
+  if (layout->incremental_inputs() != NULL)
+    fprintf(stderr, "Incremental build support is not done");//this->allocate_incremental_reloc_counts();
+
+  //fprintf(stderr, "Inside do_enum_relocs \n");
+  for (Read_relocs_data::Relocs_list::iterator p = rd->relocs.begin();
+       p != rd->relocs.end();
+       ++p)
+    {
+      // When garbage collection is on, unreferenced sections are not included
+      // in the link that would have been included normally. This is known only
+      // after Read_relocs hence this check has to be done again.
+      if (parameters->options().gc_sections()
+	  || parameters->options().icf_enabled())
+        {
+          if (p->output_section == NULL)
+            continue;
+        }
+  //fprintf(stderr, "Iteration with reloc count %ld \n", p->reloc_count);
+      if (!parameters->options().relocatable())
+	{
+	  // As noted above, when not generating an object file, we
+	  // only scan allocated sections.  We may see a non-allocated
+	  // section here if we are emitting relocs.
+	  if (p->is_data_section_allocated)
+	    target->enum_relocs(symtab, layout, this, p->data_shndx,
+				p->sh_type, p->contents->data(),
+				p->reloc_count, p->output_section,
+				p->needs_special_offset_handling,
+				this->local_symbol_count_,
+				local_symbols);
+#if 0
+	  if (parameters->options().emit_relocs())
+	    this->emit_relocs_scan(symtab, layout, local_symbols, p);
+	  if (layout->incremental_inputs() != NULL)
+	    this->incremental_relocs_scan(p);
+#endif
+	}
+#if 0
+      else
+	{
+	  Relocatable_relocs* rr = this->relocatable_relocs(p->reloc_shndx);
+	  gold_assert(rr != NULL);
+	  rr->set_reloc_count(p->reloc_count);
+	  target->scan_relocatable_relocs(symtab, layout, this,
+					  p->data_shndx, p->sh_type,
+					  p->contents->data(),
+					  p->reloc_count,
+					  p->output_section,
+					  p->needs_special_offset_handling,
+					  this->local_symbol_count_,
+					  local_symbols,
+					  rr);
+	}
+#endif
     }
 }
 
@@ -1656,6 +1793,38 @@ void
 Sized_relobj_file<64, true>::do_gc_process_relocs(Symbol_table* symtab,
 						  Layout* layout,
 						  Read_relocs_data* rd);
+#endif
+
+#ifdef HAVE_TARGET_32_LITTLE
+template
+void
+Sized_relobj_file<32, false>::do_enum_relocs(Symbol_table* symtab,
+					     Layout* layout,
+					     Read_relocs_data* rd);
+#endif
+
+#ifdef HAVE_TARGET_32_BIG
+template
+void
+Sized_relobj_file<32, true>::do_enum_relocs(Symbol_table* symtab,
+					    Layout* layout,
+					    Read_relocs_data* rd);
+#endif
+
+#ifdef HAVE_TARGET_64_LITTLE
+template
+void
+Sized_relobj_file<64, false>::do_enum_relocs(Symbol_table* symtab,
+					     Layout* layout,
+					     Read_relocs_data* rd);
+#endif
+
+#ifdef HAVE_TARGET_64_BIG
+template
+void
+Sized_relobj_file<64, true>::do_enum_relocs(Symbol_table* symtab,
+					    Layout* layout,
+					    Read_relocs_data* rd);
 #endif
 
 #ifdef HAVE_TARGET_32_LITTLE

@@ -792,6 +792,19 @@ class Sized_target : public Target
 		    size_t local_symbol_count,
 		    const unsigned char* plocal_symbols) = 0;
 
+  virtual void
+  enum_relocs(Symbol_table* symtab,
+	      Layout* layout,
+	      Sized_relobj_file<size, big_endian>* object,
+	      unsigned int data_shndx,
+	      unsigned int sh_type,
+	      const unsigned char* prelocs,
+	      size_t reloc_count,
+	      Output_section* output_section,
+	      bool needs_special_offset_handling,
+	      size_t local_symbol_count,
+	      const unsigned char* plocal_symbols) = 0;
+
   // Scan the relocs for a section, and record any information
   // required for the symbol.  SYMTAB is the symbol table.  OBJECT is
   // the object in which the section appears.  DATA_SHNDX is the

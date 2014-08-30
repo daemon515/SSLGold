@@ -380,6 +380,11 @@ class Sized_relobj_dwo : public Sized_relobj<size, big_endian>
   do_gc_process_relocs(Symbol_table*, Layout*, Read_relocs_data*)
   { gold_unreachable(); }
 
+  // Enum the relocs and adjust the symbol table.
+  void
+  do_enum_relocs(Symbol_table*, Layout*, Read_relocs_data*)
+  { gold_unreachable(); }
+
   // Scan the relocs and adjust the symbol table.
   void
   do_scan_relocs(Symbol_table*, Layout*, Read_relocs_data*)

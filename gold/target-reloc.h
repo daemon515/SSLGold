@@ -33,6 +33,90 @@
 namespace gold
 {
 
+template<int size, bool big_endian, typename Target_type, int sh_type,
+	 typename Scan>
+inline void
+enum_relocs(
+    Symbol_table* symtab,
+    Layout* layout,
+    Target_type* target,
+    Sized_relobj_file<size, big_endian>* object,
+    unsigned int data_shndx,
+    const unsigned char* prelocs,
+    size_t reloc_count,
+    Output_section* output_section,
+    bool needs_special_offset_handling,
+    size_t local_count,
+    const unsigned char* plocal_syms)
+{
+  typedef typename Reloc_types<sh_type, size, big_endian>::Reloc Reltype;
+  const int reloc_size = Reloc_types<sh_type, size, big_endian>::reloc_size;
+  //const int sym_size = elfcpp::Elf_sizes<size>::sym_size;
+  Scan scan;
+
+  fprintf(stderr, "What is prelocs %s\n", prelocs);
+  if (plocal_syms != NULL)
+     fprintf(stderr, "There may be locals. We are ignoring them \n");
+
+  for (size_t i = 0; i < reloc_count; ++i, prelocs += reloc_size)
+    {
+      Reltype reloc(prelocs);
+
+      if (needs_special_offset_handling
+	  && !output_section->is_input_address_mapped(object, data_shndx,
+						      reloc.get_r_offset()))
+	continue;
+
+      typename elfcpp::Elf_types<size>::Elf_WXword r_info = reloc.get_r_info();
+      unsigned int r_sym = elfcpp::elf_r_sym<size>(r_info);
+      unsigned int r_type = elfcpp::elf_r_type<size>(r_info);
+
+      if (r_sym < local_count)
+	{
+          r_sym = r_sym;
+#if 0
+//nothing to do with local syms. They dont need plt entries
+
+	  gold_assert(plocal_syms != NULL);
+	  typename elfcpp::Sym<size, big_endian> lsym(plocal_syms
+						      + r_sym * sym_size);
+	  unsigned int shndx = lsym.get_st_shndx();
+	  bool is_ordinary;
+	  shndx = object->adjust_sym_shndx(r_sym, shndx, &is_ordinary);
+	  // If RELOC is a relocation against a local symbol in a
+	  // section we are discarding then we can ignore it.  It will
+	  // eventually become a reloc against the value zero.
+	  //
+	  // FIXME: We should issue a warning if this is an
+	  // allocated section; is this the best place to do it?
+	  //
+	  // FIXME: The old GNU linker would in some cases look
+	  // for the linkonce section which caused this section to
+	  // be discarded, and, if the other section was the same
+	  // size, change the reloc to refer to the other section.
+	  // That seems risky and weird to me, and I don't know of
+	  // any case where it is actually required.
+	  bool is_discarded = (is_ordinary
+			       && shndx != elfcpp::SHN_UNDEF
+			       && !object->is_section_included(shndx)
+			       && !symtab->is_section_folded(object, shndx));
+	  scan.local(symtab, layout, target, object, data_shndx,
+		     output_section, reloc, r_type, lsym, is_discarded);
+#endif
+	}
+      else
+	{
+	  Symbol* gsym = object->global_symbol(r_sym);
+	  gold_assert(gsym != NULL);
+	  if (gsym->is_forwarder())
+	    gsym = symtab->resolve_forwards(gsym);
+
+	  scan.enumerate(symtab, layout, target, object, data_shndx,
+		      output_section, reloc, r_type, gsym);
+	}
+    }
+}
+
 // This function implements the generic part of reloc scanning.  The
 // template parameter Scan must be a class type which provides two
 // functions: local() and global().  Those functions implement the

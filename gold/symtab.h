@@ -793,6 +793,16 @@ class Symbol
   set_is_copied_from_dynobj()
   { this->is_copied_from_dynobj_ = true; }
 
+  // Return whether this symbol is already plt enumerated 
+  bool
+  is_plt_enumerated() const
+  { return this->is_plt_enumerated_; }
+
+  // Mark this symbol as plt enumerated.
+  void
+  set_is_plt_enumerated()
+  { this->is_plt_enumerated_ = true; }
+
   // Return whether this symbol is forced to visibility STB_LOCAL
   // by a "local:" entry in a version script.
   bool
@@ -999,6 +1009,8 @@ class Symbol
   // True if we are using a COPY reloc for this symbol, so that the
   // real definition lives in a dynamic object (bit 27).
   bool is_copied_from_dynobj_ : 1;
+  // True if this symbol was plt enumerated
+  bool is_plt_enumerated_ : 1;
   // True if this symbol was forced to local visibility by a version
   // script (bit 28).
   bool is_forced_local_ : 1;

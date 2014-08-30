@@ -2417,6 +2417,17 @@ Sized_relobj_incr<size, big_endian>::do_gc_process_relocs(Symbol_table*,
 
 template<int size, bool big_endian>
 void
+Sized_relobj_incr<size, big_endian>::do_enum_relocs(Symbol_table*,
+						    Layout* layout,
+						    Read_relocs_data*)
+{
+  layout = layout;
+}
+
+// Scan the relocs and adjust the symbol table.
+
+template<int size, bool big_endian>
+void
 Sized_relobj_incr<size, big_endian>::do_scan_relocs(Symbol_table*,
 						    Layout* layout,
 						    Read_relocs_data*)

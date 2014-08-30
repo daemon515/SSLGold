@@ -103,6 +103,37 @@ do_gold_unreachable(const char* filename, int lineno, const char* function)
   gold_exit(GOLD_ERR);
 }
 
+// This class arranges to run the scan relocs call after
+// having enumerated the reloc count
+
+class Barrier_runner : public Task_function_runner
+{
+ public:
+  Barrier_runner(const General_options& options,
+		const Input_objects* input_objects,
+		Symbol_table* symtab,
+		Layout* layout, Mapfile* mapfile)
+    : options_(options), input_objects_(input_objects), symtab_(symtab),
+      layout_(layout), mapfile_(mapfile)
+  { }
+
+  void
+  run(Workqueue*, const Task*);
+
+ private:
+  const General_options& options_;
+  const Input_objects* input_objects_;
+  Symbol_table* symtab_;
+  Layout* layout_;
+  Mapfile* mapfile_;
+};
+
+void
+Barrier_runner::run(Workqueue* workqueue, const Task* task)
+{
+  queue_barrier_tasks(this->options_, task, this->input_objects_, this->symtab_,
+		     this->layout_, workqueue, this->mapfile_);
+}
 // This class arranges to run the functions done in the middle of the
 // link.  It is just a closure.
 
@@ -454,7 +485,7 @@ queue_middle_gc_tasks(const General_options& options,
       Task_token* next_blocker = new Task_token(true);
       next_blocker->add_blocker();
       workqueue->queue(new Read_relocs(symtab, layout, *p, this_blocker,
-				       next_blocker));
+				       next_blocker, parameters->options().plt_random_sequence()));
       this_blocker = next_blocker;
     }
 
@@ -476,6 +507,75 @@ queue_middle_gc_tasks(const General_options& options,
 				     "Task_function Middle_runner"));
 }
 
+void
+do_layout_task(const General_options& options,
+		   const Input_objects* input_objects,
+		   Symbol_table* symtab,
+		   Layout* layout,
+		   Workqueue* workqueue,
+		   Mapfile* mapfile,
+                   Task_token* this_blocker)
+{
+
+  if (this_blocker == NULL)
+    {
+      if (input_objects->number_of_relobjs() == 0)
+	{
+	  // If we are given only archives in input, we have no regular
+	  // objects and THIS_BLOCKER is NULL here.  Create a dummy
+	  // blocker here so that we can run the layout task immediately.
+	  this_blocker = new Task_token(true);
+	}
+      else
+	{
+	  // If we failed to open any input files, it's possible for
+	  // THIS_BLOCKER to be NULL here.  There's no real point in
+	  // continuing if that happens.
+	  gold_assert(parameters->errors()->error_count() > 0);
+	  gold_exit(GOLD_ERR);
+	}
+    }
+
+  // When all those tasks are complete, we can start laying out the
+  // output file.
+  // TODO(csilvers): figure out a more principled way to get the target
+  Target* target = const_cast<Target*>(&parameters->target());
+  workqueue->queue(new Task_function(new Layout_task_runner(options,
+							    input_objects,
+							    symtab,
+							    target,
+							    layout,
+							    mapfile),
+				     this_blocker,
+				     "Task_function Layout_task_runner"));
+}
+void
+queue_barrier_tasks(const General_options& options,
+		   const Task* task,
+		   const Input_objects* input_objects,
+		   Symbol_table* symtab,
+		   Layout* layout,
+		   Workqueue* workqueue,
+		   Mapfile* mapfile)
+{
+
+   task = task;//to fix unused variable errors
+   Task_token* this_blocker = NULL;
+   //fprintf(stderr, "Started Scan Relocs \n");
+   for (Input_objects::Relobj_iterator p = input_objects->relobj_begin();
+     p != input_objects->relobj_end();
+     ++p)
+    {
+      Task_token* next_blocker = new Task_token(true);
+      next_blocker->add_blocker();
+      workqueue->queue(new Scan_relocs(symtab, layout, *p,
+				   (*p)->get_relocs_data(),
+				   this_blocker, next_blocker));
+      this_blocker = next_blocker;
+    }
+
+  do_layout_task(options, input_objects, symtab, layout, workqueue, mapfile, this_blocker);
+}
 // Queue up the middle set of tasks.  These are the tasks which run
 // after all the input objects have been found and all the symbols
 // have been read, but before we lay out the output file.
@@ -738,6 +838,15 @@ queue_middle_tasks(const General_options& options,
       // Doing that is more complex, since we may later decide to discard
       // some of the sections, and thus change our minds about the types
       // of references made to the symbols.
+
+      //We want to enumerate the number of relocation entries to be created
+      //The default read_relocs implementation does a read_reloc followed by a scan_reloc
+      //for every input object. However, we want to run an enum_reloc after the read_reloc
+      //and initiate the scan_reloc only after the enum_reloc for ALL the input objects are
+      //completed (when randomize plt sequence is enabled). To do this, we modify the
+      //read_reloc in reloc.cc to not call scan_reloc and we insert a barrier to ensure
+      //all read_reloc&enum_reloc for input_objects are completed before we start the scan_reloc
+
       for (Input_objects::Relobj_iterator p = input_objects->relobj_begin();
 	   p != input_objects->relobj_end();
 	   ++p)
@@ -745,12 +854,26 @@ queue_middle_tasks(const General_options& options,
 	  Task_token* next_blocker = new Task_token(true);
 	  next_blocker->add_blocker();
 	  workqueue->queue(new Read_relocs(symtab, layout, *p, this_blocker,
-					   next_blocker));
+					   next_blocker, parameters->options().plt_random_sequence()));
 	  this_blocker = next_blocker;
 	}
+
+        if (parameters->options().plt_random_sequence()){
+            //Note: The Barrier_runner simply duplicates the code portion after this block
+            workqueue->queue(new Task_function(new Barrier_runner(options,
+	    					       input_objects,
+	    					       symtab,
+	    					       layout,
+	    					       mapfile),
+	    			     this_blocker,
+	    			     "Task_function Barrier_runner"));
+            return;
+        }
     }
 
-  if (this_blocker == NULL)
+  do_layout_task(options, input_objects, symtab, layout, workqueue, mapfile, this_blocker);
+#if 0 //Duplicated the below code in do_layout_task
+   if (this_blocker == NULL)
     {
       if (input_objects->number_of_relobjs() == 0)
 	{
@@ -779,6 +902,7 @@ queue_middle_tasks(const General_options& options,
 							    mapfile),
 				     this_blocker,
 				     "Task_function Layout_task_runner"));
+#endif
 }
 
 // Queue up the final set of tasks.  This is called at the end of

@@ -1261,8 +1261,8 @@ class General_options
   DEFINE_uint(plt_rand_size, options::TWO_DASHES, '\0', 0,
 	      N_("Increased size of plt entry to use"), N_("COUNT"));
 
-  DEFINE_uint(plt_entry_count, options::TWO_DASHES, '\0', 0,
-	      N_("Plt entry count hardcoded for sequence randomization"), N_("COUNT"));
+  DEFINE_bool(plt_random_sequence, options::DASH_Z, '\0', false,
+	      N_("Randomize the PLT sequence order"), NULL);
   // The -z options.
 
   DEFINE_bool(combreloc, options::DASH_Z, '\0', true,

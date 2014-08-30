@@ -356,6 +356,20 @@ class Target_i386 : public Sized_target<32, false>
 		    size_t local_symbol_count,
 		    const unsigned char* plocal_symbols);
 
+  // Enumerate the relocations
+  void
+  enum_relocs(Symbol_table* symtab,
+	      Layout* layout,
+	      Sized_relobj_file<32, false>* object,
+	      unsigned int data_shndx,
+	      unsigned int sh_type,
+	      const unsigned char* prelocs,
+	      size_t reloc_count,
+	      Output_section* output_section,
+	      bool needs_special_offset_handling,
+	      size_t local_symbol_count,
+	      const unsigned char* plocal_symbols);
+
   // Scan the relocations to look for symbol adjustments.
   void
   scan_relocs(Symbol_table* symtab,
@@ -540,6 +554,14 @@ class Target_i386 : public Sized_target<32, false>
 	  const elfcpp::Rel<32, false>& reloc, unsigned int r_type,
 	  const elfcpp::Sym<32, false>& lsym,
 	  bool is_discarded);
+
+    inline void
+    enumerate(Symbol_table* symtab, Layout* layout, Target_i386* target,
+	   Sized_relobj_file<32, false>* object,
+	   unsigned int data_shndx,
+	   Output_section* output_section,
+	   const elfcpp::Rel<32, false>& reloc, unsigned int r_type,
+	   Symbol* gsym);
 
     inline void
     global(Symbol_table* symtab, Layout* layout, Target_i386* target,
@@ -2071,6 +2093,32 @@ Target_i386::Scan::global_reloc_may_be_function_pointer(
   return possible_function_pointer_reloc(r_type);
 }
 
+// Enumerate the relocation global symbol.
+
+inline void
+Target_i386::Scan::enumerate(Symbol_table* symtab,
+				 Layout* layout,
+				 Target_i386* target,
+				 Sized_relobj_file<32, false>* object,
+				 unsigned int data_shndx,
+				 Output_section* output_section,
+				 const elfcpp::Rel<32, false>& reloc,
+				 unsigned int r_type,
+				 Symbol* gsym)
+{
+  symtab = symtab;
+  layout = layout;
+  target = target;
+  object = object;
+  data_shndx = data_shndx;
+  output_section = output_section;
+  if (reloc.get_r_offset())
+    r_type = r_type;
+  r_type = r_type;
+  gsym = gsym;
+  fprintf(stderr, "I have reached my enumerate call Yaayyyyyy \n");
+}
+
 // Scan a relocation for a global symbol.
 
 inline void
@@ -2470,6 +2518,43 @@ Target_i386::gc_process_relocs(Symbol_table* symtab,
   gold::gc_process_relocs<32, false, Target_i386, elfcpp::SHT_REL,
 			  Target_i386::Scan,
 			  Target_i386::Relocatable_size_for_reloc>(
+    symtab,
+    layout,
+    this,
+    object,
+    data_shndx,
+    prelocs,
+    reloc_count,
+    output_section,
+    needs_special_offset_handling,
+    local_symbol_count,
+    plocal_symbols);
+}
+
+//Enumerate relocations for a section.
+
+void
+Target_i386::enum_relocs(Symbol_table* symtab,
+				Layout* layout,
+				Sized_relobj_file<32, false>* object,
+				unsigned int data_shndx,
+				unsigned int sh_type,
+				const unsigned char* prelocs,
+				size_t reloc_count,
+				Output_section* output_section,
+				bool needs_special_offset_handling,
+				size_t local_symbol_count,
+				const unsigned char* plocal_symbols)
+{
+  if (sh_type == elfcpp::SHT_RELA)
+    {
+      gold_error(_("%s: unsupported RELA reloc section"),
+		 object->name().c_str());
+      return;
+    }
+
+  gold::enum_relocs<32, false, Target_i386, elfcpp::SHT_REL,
+		    Target_i386::Scan>(
     symtab,
     layout,
     this,

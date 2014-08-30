@@ -1986,6 +1986,10 @@ class Sized_relobj_incr : public Sized_relobj<size, big_endian>
   void
   do_gc_process_relocs(Symbol_table*, Layout*, Read_relocs_data*);
 
+  // Enum the relocs and adjust the symbol table.
+  void
+  do_enum_relocs(Symbol_table*, Layout*, Read_relocs_data*);
+
   // Scan the relocs and adjust the symbol table.
   void
   do_scan_relocs(Symbol_table*, Layout*, Read_relocs_data*);

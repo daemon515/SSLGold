@@ -259,6 +259,20 @@ class Target_tilegx : public Sized_target<size, big_endian>
 
   // Scan the relocations to look for symbol adjustments.
   void
+  enum_relocs(Symbol_table* symtab,
+              Layout* layout,
+              Sized_relobj_file<size, big_endian>* object,
+              unsigned int data_shndx,
+              unsigned int sh_type,
+              const unsigned char* prelocs,
+              size_t reloc_count,
+              Output_section* output_section,
+              bool needs_special_offset_handling,
+              size_t local_symbol_count,
+              const unsigned char* plocal_symbols);
+
+  // Scan the relocations to look for symbol adjustments.
+  void
   scan_relocs(Symbol_table* symtab,
               Layout* layout,
               Sized_relobj_file<size, big_endian>* object,
@@ -451,6 +465,14 @@ class Target_tilegx : public Sized_target<size, big_endian>
           const elfcpp::Rela<size, big_endian>& reloc, unsigned int r_type,
           const elfcpp::Sym<size, big_endian>& lsym,
           bool is_discarded);
+
+    inline void
+    enumerate(Symbol_table* symtab, Layout* layout, Target_tilegx* target,
+           Sized_relobj_file<size, big_endian>* object,
+           unsigned int data_shndx,
+           Output_section* output_section,
+           const elfcpp::Rela<size, big_endian>& reloc, unsigned int r_type,
+           Symbol* gsym);
 
     inline void
     global(Symbol_table* symtab, Layout* layout, Target_tilegx* target,
@@ -3691,6 +3713,31 @@ Target_tilegx<size, big_endian>::Scan::global_reloc_may_be_function_pointer(
           || possible_function_pointer_reloc(r_type));
 }
 
+// Enumerate a relocation for a global symbol.
+
+template<int size, bool big_endian>
+inline void
+Target_tilegx<size, big_endian>::Scan::enumerate(Symbol_table* symtab,
+                            Layout* layout,
+                            Target_tilegx<size, big_endian>* target,
+                            Sized_relobj_file<size, big_endian>* object,
+                            unsigned int data_shndx,
+                            Output_section* output_section,
+                            const elfcpp::Rela<size, big_endian>& reloc,
+                            unsigned int r_type,
+                            Symbol* gsym)
+{
+  symtab = symtab;
+  layout = layout;
+  target = target;
+  object = object;
+  data_shndx = data_shndx;
+  output_section = output_section;
+  if (reloc.get_r_offset())
+    r_type = r_type;
+  gsym = gsym;
+}
+
 // Scan a relocation for a global symbol.
 
 template<int size, bool big_endian>
@@ -4169,6 +4216,46 @@ Target_tilegx<size, big_endian>::gc_process_relocs(Symbol_table* symtab,
           local_symbol_count,
           plocal_symbols);
 }
+// Enum relocations for a section.
+
+template<int size, bool big_endian>
+void
+Target_tilegx<size, big_endian>::enum_relocs(Symbol_table* symtab,
+                                 Layout* layout,
+                                 Sized_relobj_file<size, big_endian>* object,
+                                 unsigned int data_shndx,
+                                 unsigned int sh_type,
+                                 const unsigned char* prelocs,
+                                 size_t reloc_count,
+                                 Output_section* output_section,
+                                 bool needs_special_offset_handling,
+                                 size_t local_symbol_count,
+                                 const unsigned char* plocal_symbols)
+{
+  typedef Target_tilegx<size, big_endian> Tilegx;
+  typedef typename Target_tilegx<size, big_endian>::Scan Scan;
+
+  if (sh_type == elfcpp::SHT_REL)
+    {
+      gold_error(_("%s: unsupported REL reloc section"),
+                 object->name().c_str());
+      return;
+    }
+
+  gold::enum_relocs<size, big_endian, Tilegx, elfcpp::SHT_RELA, Scan>(
+    symtab,
+    layout,
+    this,
+    object,
+    data_shndx,
+    prelocs,
+    reloc_count,
+    output_section,
+    needs_special_offset_handling,
+    local_symbol_count,
+    plocal_symbols);
+}
+
 // Scan relocations for a section.
 
 template<int size, bool big_endian>

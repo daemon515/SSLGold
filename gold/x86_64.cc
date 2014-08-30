@@ -68,7 +68,7 @@ class Output_data_plt_x86_64 : public Output_section_data
       irelative_rel_(NULL), got_(got), got_plt_(got_plt),
       got_irelative_(got_irelative), count_(0), irelative_count_(0),
       tlsdesc_got_offset_(-1U), free_list_()
-  { this->init(layout); }
+  { this->init(layout);this->pltIndexList=NULL; }
 
   Output_data_plt_x86_64(Layout* layout, uint64_t plt_entry_size,
 			 Output_data_got<64, false>* got,
@@ -82,7 +82,7 @@ class Output_data_plt_x86_64 : public Output_section_data
       irelative_count_(0), tlsdesc_got_offset_(-1U), free_list_()
   {
     this->init(layout);
-
+    this->pltIndexList = NULL;
     // Initialize the free list and reserve the first entry.
     this->free_list_.init((plt_count + 1) * plt_entry_size, false);
     this->free_list_.remove(0, plt_entry_size);
@@ -184,6 +184,21 @@ class Output_data_plt_x86_64 : public Output_section_data
   void
   add_eh_frame(Layout* layout)
   { this->do_add_eh_frame(layout); }
+
+  // Sets the enumerated PLT count.
+  void
+  set_enumerated_plt_count(int count) 
+  {
+    this->enumerated_plt_count_ = count;
+    fprintf(stderr, "Setting enumerated count to %d \n", count);
+  }
+
+  // Return the expected size of the PLT table.
+  unsigned int
+  get_enumerated_plt_count() const
+  {
+    return this->enumerated_plt_count_;
+  }
 
  protected:
   // Fill in the first PLT entry.
@@ -303,6 +318,8 @@ class Output_data_plt_x86_64 : public Output_section_data
   // List of available regions within the section, for incremental
   // update links.
   Free_list free_list_;
+  //Enumerated plt count
+  unsigned int enumerated_plt_count_;
 };
 
 template<int size>
@@ -405,7 +422,7 @@ class Target_x86_64 : public Sized_target<size, false>
       rela_irelative_(NULL), copy_relocs_(elfcpp::R_X86_64_COPY),
       got_mod_index_offset_(-1U), tlsdesc_reloc_info_(),
       tls_base_symbol_defined_(false)
-  { }
+  {plt_enum_ = 0; }
 
   // Hook for a new output section.
   void
@@ -424,6 +441,20 @@ class Target_x86_64 : public Sized_target<size, false>
 		    bool needs_special_offset_handling,
 		    size_t local_symbol_count,
 		    const unsigned char* plocal_symbols);
+
+  // Enumerate the relocations to look for symbol requiring a PLT entry.
+  void
+  enum_relocs(Symbol_table* symtab,
+	      Layout* layout,
+	      Sized_relobj_file<size, false>* object,
+	      unsigned int data_shndx,
+	      unsigned int sh_type,
+	      const unsigned char* prelocs,
+	      size_t reloc_count,
+	      Output_section* output_section,
+	      bool needs_special_offset_handling,
+	      size_t local_symbol_count,
+	      const unsigned char* plocal_symbols);
 
   // Scan the relocations to look for symbol adjustments.
   void
@@ -687,6 +718,14 @@ class Target_x86_64 : public Sized_target<size, false>
 	  bool is_discarded);
 
     inline void
+    enumerate(Symbol_table* symtab, Layout* layout, Target_x86_64* target,
+	   Sized_relobj_file<size, false>* object,
+	   unsigned int data_shndx,
+	   Output_section* output_section,
+	   const elfcpp::Rela<size, false>& reloc, unsigned int r_type,
+	   Symbol* gsym);
+
+    inline void
     global(Symbol_table* symtab, Layout* layout, Target_x86_64* target,
 	   Sized_relobj_file<size, false>* object,
 	   unsigned int data_shndx,
@@ -874,6 +913,10 @@ class Target_x86_64 : public Sized_target<size, false>
   void
   make_plt_section(Symbol_table* symtab, Layout* layout);
 
+  // Enumerate PLT entry for a global symbol.
+  void
+  enum_plt_entry(Symbol*);
+
   // Create a PLT entry for a global symbol.
   void
   make_plt_entry(Symbol_table*, Layout*, Symbol*);
@@ -963,6 +1006,8 @@ class Target_x86_64 : public Sized_target<size, false>
 
   // The GOT section.
   Output_data_got<64, false>* got_;
+  // The number of entries in PLT section 
+  unsigned int plt_enum_;
   // The PLT section.
   Output_data_plt_x86_64<size>* plt_;
   // The GOT PLT section.
@@ -1207,7 +1252,10 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
   unsigned int offset;
   unsigned int reserved;
   Output_data_space* got;
-  unsigned int listsize = parameters->options().plt_entry_count();
+  unsigned int listsize = 0;
+  if (parameters->options().plt_random_sequence())
+    listsize = this->get_enumerated_plt_count();
+
   if ((listsize > 0) && (this->pltIndexList == NULL)){
     srand(time(NULL));
     this->indexused = new bool[listsize];
@@ -1294,7 +1342,8 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
 
   gsym->set_plt_offset(plt_offset);
 
-//gold_debug(DEBUG_SCRIPT, _("Symbol '%s' is at plt offset '%ld'"), gsym->name(), plt_offset);
+//gold_debug(DEBUG_SCRIPT, _("Symbol '%s' is at plt offset '%ld' and got offset '%ld'"), gsym->name(), plt_offset, got_offset);
+  //fprintf(stderr, "symtab : %p and layout : %p", symtab, layout);
 
   // Every PLT entry needs a reloc.
   if (listsize == 0){
@@ -1748,7 +1797,7 @@ Output_data_plt_x86_64<size>::do_write(Output_file* of)
 					plt_address + plt_offset + lazy_offset);
     }
     if (this->pltIndexList != NULL) 
-      plt_index = parameters->options().plt_entry_count();
+      plt_index = this->get_enumerated_plt_count();
     else
       plt_index += 1;
       
@@ -1788,6 +1837,9 @@ Target_x86_64<size>::make_plt_section(Symbol_table* symtab, Layout* layout)
       this->plt_ = this->make_data_plt(layout, this->got_, this->got_plt_,
 				       this->got_irelative_);
 
+      //fprintf(stderr, "First call to add_entry \n");
+      this->plt_->set_enumerated_plt_count(this->plt_enum_);
+
       // Add unwind information if requested.
       if (parameters->options().ld_generated_unwind_info())
 	this->plt_->add_eh_frame(layout);
@@ -1810,6 +1862,20 @@ typename Target_x86_64<size>::Reloc_section*
 Target_x86_64<size>::rela_tlsdesc_section(Layout* layout) const
 {
   return this->plt_section()->rela_tlsdesc(layout);
+}
+
+// Enumerate PLT entry for a global symbol.
+
+template<int size>
+void
+Target_x86_64<size>::enum_plt_entry(Symbol* gsym)
+{
+  if (gsym->has_plt_offset() || gsym->is_plt_enumerated())
+    return;
+
+  this->plt_enum_ += 1;
+  gsym->set_is_plt_enumerated();
+  //fprintf(stderr, "PLT entry count is %d \n", this->plt_enum_);
 }
 
 // Create a PLT entry for a global symbol.
@@ -2806,6 +2872,138 @@ Target_x86_64<size>::Scan::global_reloc_may_be_function_pointer(
 	  || possible_function_pointer_reloc(r_type));
 }
 
+// Enumerate the relocation global symbol.
+
+template<int size>
+inline void
+Target_x86_64<size>::Scan::enumerate(Symbol_table* symtab,
+			    Layout* layout,
+			    Target_x86_64<size>* target,
+			    Sized_relobj_file<size, false>* object,
+			    unsigned int data_shndx,
+			    Output_section* output_section,
+			    const elfcpp::Rela<size, false>& reloc,
+			    unsigned int r_type,
+			    Symbol* gsym)
+{
+  symtab = symtab;
+  layout = layout;
+  data_shndx = data_shndx;
+  if (reloc.get_r_offset())
+    output_section = output_section;
+
+  // A STT_GNU_IFUNC symbol may require a PLT entry.
+  if (gsym->type() == elfcpp::STT_GNU_IFUNC
+      && this->reloc_needs_plt_for_ifunc(object, r_type))
+    target->enum_plt_entry(gsym);
+
+  switch (r_type)
+    {
+    case elfcpp::R_X86_64_NONE:
+    case elfcpp::R_X86_64_GNU_VTINHERIT:
+    case elfcpp::R_X86_64_GNU_VTENTRY:
+      break;
+
+    case elfcpp::R_X86_64_64:
+    case elfcpp::R_X86_64_32:
+    case elfcpp::R_X86_64_32S:
+    case elfcpp::R_X86_64_16:
+    case elfcpp::R_X86_64_8:
+      {
+	// Make a PLT entry if necessary.
+	if (gsym->needs_plt_entry())
+	  {
+	    target->enum_plt_entry(gsym);
+	  }
+      }
+      break;
+
+    case elfcpp::R_X86_64_PC64:
+    case elfcpp::R_X86_64_PC32:
+    case elfcpp::R_X86_64_PC32_BND:
+    case elfcpp::R_X86_64_PC16:
+    case elfcpp::R_X86_64_PC8:
+      {
+	// Make a PLT entry if necessary.
+	if (gsym->needs_plt_entry())
+	  target->enum_plt_entry(gsym);
+      }
+      break;
+
+    case elfcpp::R_X86_64_GOT64:
+    case elfcpp::R_X86_64_GOT32:
+    case elfcpp::R_X86_64_GOTPCREL64:
+    case elfcpp::R_X86_64_GOTPCREL:
+    case elfcpp::R_X86_64_GOTPLT64:
+      {
+	// For GOTPLT64, we also need a PLT entry (but only if the
+	// symbol is not fully resolved).
+	if (r_type == elfcpp::R_X86_64_GOTPLT64
+	    && !gsym->final_value_is_known())
+	  target->enum_plt_entry(gsym);
+      }
+      break;
+
+    case elfcpp::R_X86_64_PLT32:
+    case elfcpp::R_X86_64_PLT32_BND:
+      // If the symbol is fully resolved, this is just a PC32 reloc.
+      // Otherwise we need a PLT entry.
+      if (gsym->final_value_is_known())
+	break;
+      // If building a shared library, we can also skip the PLT entry
+      // if the symbol is defined in the output file and is protected
+      // or hidden.
+      if (gsym->is_defined()
+	  && !gsym->is_from_dynobj()
+	  && !gsym->is_preemptible())
+	break;
+      target->enum_plt_entry(gsym);
+      break;
+
+    case elfcpp::R_X86_64_GOTPC32:
+    case elfcpp::R_X86_64_GOTOFF64:
+    case elfcpp::R_X86_64_GOTPC64:
+    case elfcpp::R_X86_64_PLTOFF64:
+      // For PLTOFF64, we also need a PLT entry (but only if the
+      // symbol is not fully resolved).
+      if (r_type == elfcpp::R_X86_64_PLTOFF64
+	  && !gsym->final_value_is_known())
+	target->enum_plt_entry(gsym);
+      break;
+
+    case elfcpp::R_X86_64_COPY:
+    case elfcpp::R_X86_64_GLOB_DAT:
+    case elfcpp::R_X86_64_JUMP_SLOT:
+    case elfcpp::R_X86_64_RELATIVE:
+    case elfcpp::R_X86_64_IRELATIVE:
+      // These are outstanding tls relocs, which are unexpected when linking
+    case elfcpp::R_X86_64_TPOFF64:
+    case elfcpp::R_X86_64_DTPMOD64:
+    case elfcpp::R_X86_64_TLSDESC:
+      gold_error(_("%s: unexpected reloc %u in object file"),
+		 object->name().c_str(), r_type);
+      break;
+
+      // These are initial tls relocs, which are expected for global()
+    case elfcpp::R_X86_64_TLSGD:            // Global-dynamic
+    case elfcpp::R_X86_64_GOTPC32_TLSDESC:  // Global-dynamic (from ~oliva url)
+    case elfcpp::R_X86_64_TLSDESC_CALL:
+    case elfcpp::R_X86_64_TLSLD:            // Local-dynamic
+    case elfcpp::R_X86_64_DTPOFF32:
+    case elfcpp::R_X86_64_DTPOFF64:
+    case elfcpp::R_X86_64_GOTTPOFF:         // Initial-exec
+    case elfcpp::R_X86_64_TPOFF32:          // Local-exec
+      break;
+
+    case elfcpp::R_X86_64_SIZE32:
+    case elfcpp::R_X86_64_SIZE64:
+    default:
+      gold_error(_("%s: unsupported reloc %u against global symbol %s"),
+		 object->name().c_str(), r_type,
+		 gsym->demangled_name().c_str());
+      break;
+    }
+}
 // Scan a relocation for a global symbol.
 
 template<int size>
@@ -3210,6 +3408,45 @@ Target_x86_64<size>::gc_process_relocs(Symbol_table* symtab,
     plocal_symbols);
 
 }
+// Enumerate the relocations for a section.
+
+template<int size>
+void
+Target_x86_64<size>::enum_relocs(Symbol_table* symtab,
+				 Layout* layout,
+				 Sized_relobj_file<size, false>* object,
+				 unsigned int data_shndx,
+				 unsigned int sh_type,
+				 const unsigned char* prelocs,
+				 size_t reloc_count,
+				 Output_section* output_section,
+				 bool needs_special_offset_handling,
+				 size_t local_symbol_count,
+				 const unsigned char* plocal_symbols)
+{
+  fprintf(stderr, "Call to enum_relocs \n");
+  if (sh_type == elfcpp::SHT_REL)
+    {
+      gold_error(_("%s: unsupported REL reloc section"),
+		 object->name().c_str());
+      return;
+    }
+
+  gold::enum_relocs<size, false, Target_x86_64<size>, elfcpp::SHT_RELA,
+      typename Target_x86_64<size>::Scan>(
+    symtab,
+    layout,
+    this,
+    object,
+    data_shndx,
+    prelocs,
+    reloc_count,
+    output_section,
+    needs_special_offset_handling,
+    local_symbol_count,
+    plocal_symbols);
+}
+
 // Scan relocations for a section.
 
 template<int size>

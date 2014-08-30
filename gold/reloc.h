@@ -67,9 +67,9 @@ class Read_relocs : public Task
   // or Gc_process_relocs task, so that they run in a deterministic
   // order.
   Read_relocs(Symbol_table* symtab, Layout* layout, Relobj* object,
-	      Task_token* this_blocker, Task_token* next_blocker)
+	      Task_token* this_blocker, Task_token* next_blocker, bool doEnumerate)
     : symtab_(symtab), layout_(layout), object_(object),
-      this_blocker_(this_blocker), next_blocker_(next_blocker)
+      this_blocker_(this_blocker), next_blocker_(next_blocker), bEnumerate_(doEnumerate)
   { }
 
   // The standard Task methods.
@@ -92,6 +92,7 @@ class Read_relocs : public Task
   Relobj* object_;
   Task_token* this_blocker_;
   Task_token* next_blocker_;
+  bool bEnumerate_;
 };
 
 // Process the relocs to figure out which sections are garbage.
@@ -111,6 +112,47 @@ class Gc_process_relocs : public Task
   { }
 
   ~Gc_process_relocs();
+
+  // The standard Task methods.
+
+  Task_token*
+  is_runnable();
+
+  void
+  locks(Task_locker*);
+
+  void
+  run(Workqueue*);
+
+  std::string
+  get_name() const;
+
+ private:
+  Symbol_table* symtab_;
+  Layout* layout_;
+  Relobj* object_;
+  Read_relocs_data* rd_;
+  Task_token* this_blocker_;
+  Task_token* next_blocker_;
+};
+
+// Enumerate the relocations for an object to see if they require any
+// GOT/PLT/COPY relocations.
+
+class Enum_relocs : public Task
+{
+ public:
+  // THIS_BLOCKER prevents this task from running until the previous
+  // one is finished.  NEXT_BLOCKER prevents the next task from
+  // running.
+  Enum_relocs(Symbol_table* symtab, Layout* layout, Relobj* object,
+	      Read_relocs_data* rd, Task_token* this_blocker,
+	      Task_token* next_blocker)
+    : symtab_(symtab), layout_(layout), object_(object), rd_(rd),
+      this_blocker_(this_blocker), next_blocker_(next_blocker)
+  { }
+
+  ~Enum_relocs();
 
   // The standard Task methods.
 

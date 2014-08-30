@@ -1063,6 +1063,11 @@ class Relobj : public Object
   gc_process_relocs(Symbol_table* symtab, Layout* layout, Read_relocs_data* rd)
   { return this->do_gc_process_relocs(symtab, layout, rd); }
 
+  // Enum the relocs and adjust the symbol table.
+  void
+  enum_relocs(Symbol_table* symtab, Layout* layout, Read_relocs_data* rd)
+  { return this->do_enum_relocs(symtab, layout, rd); }
+
   // Scan the relocs and adjust the symbol table.
   void
   scan_relocs(Symbol_table* symtab, Layout* layout, Read_relocs_data* rd)
@@ -1269,6 +1274,10 @@ class Relobj : public Object
   // Process the relocs--implemented by child class.
   virtual void
   do_gc_process_relocs(Symbol_table*, Layout*, Read_relocs_data*) = 0;
+
+  // Enum the relocs--implemented by child class.
+  virtual void
+  do_enum_relocs(Symbol_table*, Layout*, Read_relocs_data*) = 0;
 
   // Scan the relocs--implemented by child class.
   virtual void
@@ -2278,6 +2287,10 @@ class Sized_relobj_file : public Sized_relobj<size, big_endian>
   // during garbage collection.
   void
   do_gc_process_relocs(Symbol_table*, Layout*, Read_relocs_data*);
+
+  // Enum the relocs and adjust the symbol table.
+  void
+  do_enum_relocs(Symbol_table*, Layout*, Read_relocs_data*);
 
   // Scan the relocs and adjust the symbol table.
   void
