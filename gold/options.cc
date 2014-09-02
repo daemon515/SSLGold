@@ -1096,7 +1096,6 @@ General_options::finalize()
   if (this->nmagic() || this->omagic())
     this->set_static(true);
 
-   fprintf(stderr, "PLT rand size is %d \n", this->plt_rand_size());
   // If --thread_count is specified, it applies to
   // --thread-count-{initial,middle,final}, though it doesn't override
   // them.
@@ -1277,6 +1276,11 @@ General_options::finalize()
   // --rosegment-gap implies --rosegment.
   if (this->user_set_rosegment_gap())
     this->set_rosegment(true);
+
+  fprintf(stderr, "PLT rand size is %d \n", this->plt_rand_size());
+  //We could force plt-random-sequence if size is non 0
+  if ((this->plt_rand_size() > 0) && !this->plt_random_sequence())
+    gold_fatal(_("--plt-rand-size requires -z plt-random-sequence"));
 
   // FIXME: we can/should be doing a lot more sanity checking here.
 }

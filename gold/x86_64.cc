@@ -68,7 +68,7 @@ class Output_data_plt_x86_64 : public Output_section_data
       irelative_rel_(NULL), got_(got), got_plt_(got_plt),
       got_irelative_(got_irelative), count_(0), irelative_count_(0),
       tlsdesc_got_offset_(-1U), free_list_()
-  { this->init(layout);this->pltIndexList=NULL; }
+  { this->init(layout);this->pltIndexList=NULL;this->pltStartOffset=NULL; }
 
   Output_data_plt_x86_64(Layout* layout, uint64_t plt_entry_size,
 			 Output_data_got<64, false>* got,
@@ -83,6 +83,7 @@ class Output_data_plt_x86_64 : public Output_section_data
   {
     this->init(layout);
     this->pltIndexList = NULL;
+    this->pltStartOffset = NULL;
     // Initialize the free list and reserve the first entry.
     this->free_list_.init((plt_count + 1) * plt_entry_size, false);
     this->free_list_.remove(0, plt_entry_size);
@@ -275,9 +276,8 @@ class Output_data_plt_x86_64 : public Output_section_data
   static const int plt_eh_frame_cie_size = 16;
   static const unsigned char plt_eh_frame_cie[plt_eh_frame_cie_size];
 
-  //A vector that maintains the random start offset for each PLT entry. Indexed by plt entry index
-  std::vector<int> pltStartOffset;
-  //std::vector<Symbol*> gSymList;
+  //An array that maintains the random start offset for each PLT entry. Indexed by plt entry index
+  unsigned int* pltStartOffset;
 
   bool* indexused;
   unsigned int* pltIndexList;
@@ -1263,6 +1263,8 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
     this->symRefList = new Symbol*[listsize];
     for (unsigned int i = 0; i < listsize; i++)
       this->indexused[i] = 0;
+    if (parameters->options().plt_rand_size() > 0)
+      this->pltStartOffset = new unsigned int[listsize];
   }
   if (gsym->type() == elfcpp::STT_GNU_IFUNC
       && gsym->can_use_relative_reloc(false))
@@ -1305,9 +1307,9 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
       plt_offset = plt_index * this->get_plt_entry_size();
 
       if (parameters->options().plt_rand_size() > 0){
-          this->pltStartOffset.insert(this->pltStartOffset.end(), rand() % parameters->options().plt_rand_size() + 1);
-          plt_offset += this->pltStartOffset.at(plt_index-offset);
-//gold_debug(DEBUG_SCRIPT, _("Size of vector %ld and value at '%d' is %d"), this->pltStartOffset.size(), plt_index-offset, this->pltStartOffset.at(plt_index-offset));
+          this->pltStartOffset[plt_index-offset] = rand() % parameters->options().plt_rand_size() + 1;
+          plt_offset += this->pltStartOffset[plt_index-offset];
+//gold_debug(DEBUG_SCRIPT, _("Size of vector %ld and value at '%d' is %d"), this->pltStartOffset.size(), plt_index-offset, this->pltStartOffset[plt_index-offset]);
 
       }
 
@@ -1578,7 +1580,7 @@ Output_data_plt_x86_64_standard<size>::do_fill_plt_entry(
 
   int pre_rand_size = 0;
   if (parameters->options().plt_rand_size() > 0){
-      pre_rand_size = this->pltStartOffset.at(plt_index);
+      pre_rand_size = this->pltStartOffset[plt_index];
 //gold_debug(DEBUG_SCRIPT, _("Size of vector %ld and store is '%d' at index %d"), this->pltStartOffset.size(), pre_rand_size, plt_index);
   }
 
