@@ -485,7 +485,7 @@ queue_middle_gc_tasks(const General_options& options,
       Task_token* next_blocker = new Task_token(true);
       next_blocker->add_blocker();
       workqueue->queue(new Read_relocs(symtab, layout, *p, this_blocker,
-				       next_blocker, parameters->options().plt_random_sequence()));
+				       next_blocker, false));
       this_blocker = next_blocker;
     }
 
@@ -847,6 +847,11 @@ queue_middle_tasks(const General_options& options,
       //read_reloc in reloc.cc to not call scan_reloc and we insert a barrier to ensure
       //all read_reloc&enum_reloc for input_objects are completed before we start the scan_reloc
 
+      bool enumerateRelocs = false;
+      if (parameters->options().plt_random_sequence() || (parameters->options().plt_random_size() > 0)
+           || (parameters->options().plt_boobytrap_frequency() > 0))
+          enumerateRelocs = true;
+
       for (Input_objects::Relobj_iterator p = input_objects->relobj_begin();
 	   p != input_objects->relobj_end();
 	   ++p)
@@ -854,11 +859,11 @@ queue_middle_tasks(const General_options& options,
 	  Task_token* next_blocker = new Task_token(true);
 	  next_blocker->add_blocker();
 	  workqueue->queue(new Read_relocs(symtab, layout, *p, this_blocker,
-					   next_blocker, parameters->options().plt_random_sequence()));
+					   next_blocker, enumerateRelocs));
 	  this_blocker = next_blocker;
 	}
 
-        if (parameters->options().plt_random_sequence()){
+        if (enumerateRelocs == true){
             //Note: The Barrier_runner simply duplicates the code portion after this block
             workqueue->queue(new Task_function(new Barrier_runner(options,
 	    					       input_objects,

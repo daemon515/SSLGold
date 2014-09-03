@@ -201,6 +201,21 @@ class Output_data_plt_x86_64 : public Output_section_data
     return this->enumerated_plt_count_;
   }
 
+  // Sets the boobytrap symbol reference.
+  void
+  set_boobytrap_symbol(Symbol* sym) 
+  {
+    this->boobytrapSym_ = sym;
+    //fprintf(stderr, "Setting enumerated count to %d \n", count);
+  }
+
+  // Return the sym reference to booby trap entry.
+  Symbol*
+  get_boobytrap_symbol() const
+  {
+    return this->boobytrapSym_;
+  }
+
  protected:
   // Fill in the first PLT entry.
   void
@@ -320,6 +335,8 @@ class Output_data_plt_x86_64 : public Output_section_data
   Free_list free_list_;
   //Enumerated plt count
   unsigned int enumerated_plt_count_;
+  //Symbol reference of boobytrap entry
+  Symbol* boobytrapSym_;
 };
 
 template<int size>
@@ -330,7 +347,7 @@ class Output_data_plt_x86_64_standard : public Output_data_plt_x86_64<size>
 				  Output_data_got<64, false>* got,
 				  Output_data_space* got_plt,
 				  Output_data_space* got_irelative)
-    : Output_data_plt_x86_64<size>(layout, parameters->options().plt_rand_size() + plt_entry_size,
+    : Output_data_plt_x86_64<size>(layout, parameters->options().plt_random_size() + plt_entry_size,
 				   got, got_plt, got_irelative)
   { }
 
@@ -339,7 +356,7 @@ class Output_data_plt_x86_64_standard : public Output_data_plt_x86_64<size>
 				  Output_data_space* got_plt,
 				  Output_data_space* got_irelative,
 				  unsigned int plt_count)
-    : Output_data_plt_x86_64<size>(layout, parameters->options().plt_rand_size() + plt_entry_size,
+    : Output_data_plt_x86_64<size>(layout, parameters->options().plt_random_size() + plt_entry_size,
 				   got, got_plt, got_irelative,
 				   plt_count)
   { }
@@ -347,7 +364,7 @@ class Output_data_plt_x86_64_standard : public Output_data_plt_x86_64<size>
  protected:
   virtual unsigned int
   do_get_plt_entry_size() const
-  { return plt_entry_size + parameters->options().plt_rand_size(); }
+  { return plt_entry_size + parameters->options().plt_random_size(); }
 
   virtual void
   do_add_eh_frame(Layout* layout)
@@ -422,7 +439,7 @@ class Target_x86_64 : public Sized_target<size, false>
       rela_irelative_(NULL), copy_relocs_(elfcpp::R_X86_64_COPY),
       got_mod_index_offset_(-1U), tlsdesc_reloc_info_(),
       tls_base_symbol_defined_(false)
-  {plt_enum_ = 0; }
+  {plt_enum_ = 0; boobyTrapHandle_ = NULL;}
 
   // Hook for a new output section.
   void
@@ -1032,6 +1049,12 @@ class Target_x86_64 : public Sized_target<size, false>
   std::vector<Tlsdesc_info> tlsdesc_reloc_info_;
   // True if the _TLS_MODULE_BASE_ symbol has been defined.
   bool tls_base_symbol_defined_;
+  //Symbol reference of boobytrap handler
+  Symbol* boobyTrapHandle_;
+  //boobytraps inserted for every X plt entries
+  unsigned int BTperXplt;
+  //Number of BT inserted till now. Insert BT whenever PLTsInserted equals BTperXplt
+  unsigned int PLTsInserted;
 };
 
 template<>
@@ -1242,7 +1265,9 @@ void
 Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
 					Symbol* gsym)
 {
-  gold_assert(!gsym->has_plt_offset());
+  //dont assert if gsym is same as boobytrap entry
+  if (gsym != this->get_boobytrap_symbol())
+    gold_assert(!gsym->has_plt_offset());
 
   unsigned int plt_index;
   off_t plt_offset;
@@ -1252,9 +1277,7 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
   unsigned int offset;
   unsigned int reserved;
   Output_data_space* got;
-  unsigned int listsize = 0;
-  if (parameters->options().plt_random_sequence())
-    listsize = this->get_enumerated_plt_count();
+  unsigned int listsize = this->get_enumerated_plt_count();
 
   if ((listsize > 0) && (this->pltIndexList == NULL)){
     srand(time(NULL));
@@ -1263,7 +1286,7 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
     this->symRefList = new Symbol*[listsize];
     for (unsigned int i = 0; i < listsize; i++)
       this->indexused[i] = 0;
-    if (parameters->options().plt_rand_size() > 0)
+    if (parameters->options().plt_random_size() > 0)
       this->pltStartOffset = new unsigned int[listsize];
   }
   if (gsym->type() == elfcpp::STT_GNU_IFUNC
@@ -1282,17 +1305,22 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
       reserved = 3;
       got = this->got_plt_;
       if (listsize > 0){
-        int seq = rand() % listsize;
-        while (1){
-          if (this->indexused[seq] == 0){
-            this->indexused[seq] = 1;
-            this->pltIndexList[this->count_] = seq;
-            break;
-          } else {
-            seq = (seq + 1) % listsize;
+        if (parameters->options().plt_random_sequence() != true) {
+          this->pltIndexList[this->count_] = *pcount;
+          this->indexused[this->count_] = 1;
+        } else {
+          int seq = rand() % listsize;
+          while (1){
+            if ((this->indexused[seq] != 0)){
+              seq = (seq + 1) % listsize;
+            } else {
+              this->indexused[seq] = 1;
+              this->pltIndexList[this->count_] = seq;
+              break;
+            }
           }
-        } 
-        plt_index = this->pltIndexList[this->count_] + 1;
+        }
+        plt_index = this->pltIndexList[this->count_] + offset;
       } else {
         plt_index = *pcount + offset;
       }
@@ -1306,8 +1334,8 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
 
       plt_offset = plt_index * this->get_plt_entry_size();
 
-      if (parameters->options().plt_rand_size() > 0){
-          this->pltStartOffset[plt_index-offset] = rand() % parameters->options().plt_rand_size() + 1;
+      if (parameters->options().plt_random_size() > 0){
+          this->pltStartOffset[plt_index-offset] = rand() % parameters->options().plt_random_size() + 1;
           plt_offset += this->pltStartOffset[plt_index-offset];
 //gold_debug(DEBUG_SCRIPT, _("Size of vector %ld and value at '%d' is %d"), this->pltStartOffset.size(), plt_index-offset, this->pltStartOffset[plt_index-offset]);
 
@@ -1345,7 +1373,6 @@ Output_data_plt_x86_64<size>::add_entry(Symbol_table* symtab, Layout* layout,
   gsym->set_plt_offset(plt_offset);
 
 //gold_debug(DEBUG_SCRIPT, _("Symbol '%s' is at plt offset '%ld' and got offset '%ld'"), gsym->name(), plt_offset, got_offset);
-  //fprintf(stderr, "symtab : %p and layout : %p", symtab, layout);
 
   // Every PLT entry needs a reloc.
   if (listsize == 0){
@@ -1579,7 +1606,7 @@ Output_data_plt_x86_64_standard<size>::do_fill_plt_entry(
   const unsigned char hlt_val[1] = {0xF4};
 
   int pre_rand_size = 0;
-  if (parameters->options().plt_rand_size() > 0){
+  if (parameters->options().plt_random_size() > 0){
       pre_rand_size = this->pltStartOffset[plt_index];
 //gold_debug(DEBUG_SCRIPT, _("Size of vector %ld and store is '%d' at index %d"), this->pltStartOffset.size(), pre_rand_size, plt_index);
   }
@@ -1595,7 +1622,7 @@ Output_data_plt_x86_64_standard<size>::do_fill_plt_entry(
 
   memcpy(pov+i, plt_entry, plt_entry_size);
 
-  int plt_size = parameters->options().plt_rand_size();
+  int plt_size = parameters->options().plt_random_size();
 
   while (i+2 <= plt_size){
     memcpy(pov+plt_entry_size+i,ud2_val, 2);
@@ -1840,7 +1867,22 @@ Target_x86_64<size>::make_plt_section(Symbol_table* symtab, Layout* layout)
 				       this->got_irelative_);
 
       //fprintf(stderr, "First call to add_entry \n");
-      this->plt_->set_enumerated_plt_count(this->plt_enum_);
+      unsigned int BTCount = 0;
+      this->BTperXplt = 0;
+      this->PLTsInserted = 0;
+      //We should have a valid boobytrap handler if we want to insert boobytraps
+      if ((parameters->options().plt_boobytrap_frequency()) > 0 && (NULL == this->boobyTrapHandle_)){
+        //throw a warning that we cannot insert booby traps
+	gold_warning(_("Did not find a booby Trap Handler. Hence cannot insert boobytraps in PLT"));
+      } else {
+        this->BTperXplt = parameters->options().plt_boobytrap_frequency();
+        this->PLTsInserted = 0;
+        if (this->BTperXplt > 0)
+          BTCount = (unsigned int)(this->plt_enum_ / this->BTperXplt);
+      }
+
+      this->plt_->set_enumerated_plt_count(this->plt_enum_ + BTCount);
+      this->plt_->set_boobytrap_symbol(this->boobyTrapHandle_);
 
       // Add unwind information if requested.
       if (parameters->options().ld_generated_unwind_info())
@@ -1894,6 +1936,15 @@ Target_x86_64<size>::make_plt_entry(Symbol_table* symtab, Layout* layout,
     this->make_plt_section(symtab, layout);
 
   this->plt_->add_entry(symtab, layout, gsym);
+
+  this->PLTsInserted += 1;
+
+  if (this->PLTsInserted == this->BTperXplt){
+    unsigned int plt_offset = this->boobyTrapHandle_->plt_offset_safe();
+    this->plt_->add_entry(symtab, layout, this->boobyTrapHandle_);
+    this->boobyTrapHandle_->set_plt_offset_safe(plt_offset);
+    this->PLTsInserted = 0;
+  }
 }
 
 // Make a PLT entry for a local STT_GNU_IFUNC symbol.
@@ -2894,6 +2945,11 @@ Target_x86_64<size>::Scan::enumerate(Symbol_table* symtab,
   if (reloc.get_r_offset())
     output_section = output_section;
 
+  //Record the gsym reference to the boobytrap handler. This is a dirty hack but should work
+  if (strcmp(gsym->name(), "__llvm_multicompiler_boobytrap") == 0){
+    target->boobyTrapHandle_ = gsym;
+  }
+ 
   // A STT_GNU_IFUNC symbol may require a PLT entry.
   if (gsym->type() == elfcpp::STT_GNU_IFUNC
       && this->reloc_needs_plt_for_ifunc(object, r_type))

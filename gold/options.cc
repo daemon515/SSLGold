@@ -1277,10 +1277,12 @@ General_options::finalize()
   if (this->user_set_rosegment_gap())
     this->set_rosegment(true);
 
-  fprintf(stderr, "PLT rand size is %d \n", this->plt_rand_size());
-  //We could force plt-random-sequence if size is non 0
-  if ((this->plt_rand_size() > 0) && !this->plt_random_sequence())
-    gold_fatal(_("--plt-rand-size requires -z plt-random-sequence"));
+  fprintf(stderr, "PLT rand size=%d, boobytrap frequency=%d,PLT rand Seq=%d \n", 
+        this->plt_random_size(), this->plt_boobytrap_frequency(), this->plt_random_sequence());
+  //plt-random-* is not implemented for incremental link
+  if ((this->incremental_mode_ != INCREMENTAL_OFF) && ((this->plt_boobytrap_frequency() > 0) 
+              || this->plt_random_sequence() || (this->plt_random_sequence() > 0)))
+    gold_fatal(_("incremental linking is not compatible with plt-random-* features"));
 
   // FIXME: we can/should be doing a lot more sanity checking here.
 }

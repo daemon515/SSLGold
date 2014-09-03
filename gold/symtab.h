@@ -445,6 +445,23 @@ class Symbol
     this->plt_offset_ = plt_offset;
   }
 
+  // Return the offset into the PLT section of this symbol without asserting
+  unsigned int
+  plt_offset_safe() const
+  {
+    //gold_assert(this->has_plt_offset());
+    //fprintf(stderr, "Getting plt offset for %s\n", this->name_);
+    return this->plt_offset_;
+  }
+
+  // Set the PLT offset of this symbol without asserting
+  void
+  set_plt_offset_safe(unsigned int plt_offset)
+  {
+    //gold_assert(plt_offset != -1U);
+    this->plt_offset_ = plt_offset;
+  }
+
   // Return whether this dynamic symbol needs a special value in the
   // dynamic symbol table.
   bool
