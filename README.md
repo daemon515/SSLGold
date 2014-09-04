@@ -25,6 +25,9 @@ $ make install
 -> Use the ld.gold found in $(specify_where_to_store_bins)/bins as the default linker
 
 -> PLT randomization build options:
+
 --plt-random-size=SIZE → SIZE by which to increase each plt entry size
+
 -z, plt-random-sequence → changes the sequence order of the PLT entries
+
 --plt-boobytrap-frequence=COUNT → Add booby trap for every COUNT PLT entries
