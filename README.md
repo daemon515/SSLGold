@@ -5,6 +5,7 @@ The original Gold linker source from binutils2.24 with my experimental updates
 If you want to use this:
 
 1. Download the binutils2.24.tar.gz from http://ftp.gnu.org/gnu/binutils/. [The gold modifications are based on 2.24 binutils version]
+
 2. We want to replace the gold folder in the downloaded binutils (e.g. binutils2.24/gold) and build with the modified version of the gold linker. Hence
 
 $ git clone https://github.com/SajoSG/SSLGold.git
