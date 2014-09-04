@@ -1259,7 +1259,7 @@ class General_options
 		N_("Ignored for GCC linker option compatibility"),
 		"");
   DEFINE_uint(plt_random_size, options::TWO_DASHES, '\0', 0,
-	      N_("Increased size of plt entry to use"), N_("COUNT"));
+	      N_("SIZE by which to increase the size of a plt entry"), N_("SIZE"));
 
   DEFINE_uint(plt_boobytrap_frequency, options::TWO_DASHES, '\0', 0,
 	      N_("Booby Traps inserted for every COUNT PLT entries"), N_("COUNT"));

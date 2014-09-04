@@ -146,7 +146,7 @@ main(int argc, char** argv)
   bindtextdomain(PACKAGE, LOCALEDIR);
   textdomain(PACKAGE);
 
-  fprintf(stderr, "Debug version of gold linker with plt rand size\n");
+  //fprintf(stderr, "Debug version of gold linker with plt rand size\n");
 
   program_name = argv[0];
 

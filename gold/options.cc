@@ -1277,8 +1277,8 @@ General_options::finalize()
   if (this->user_set_rosegment_gap())
     this->set_rosegment(true);
 
-  fprintf(stderr, "PLT rand size=%d, boobytrap frequency=%d,PLT rand Seq=%d \n", 
-        this->plt_random_size(), this->plt_boobytrap_frequency(), this->plt_random_sequence());
+  //fprintf(stderr, "PLT rand size=%d, boobytrap frequency=%d,PLT rand Seq=%d \n", 
+    //    this->plt_random_size(), this->plt_boobytrap_frequency(), this->plt_random_sequence());
   //plt-random-* is not implemented for incremental link
   if ((this->incremental_mode_ != INCREMENTAL_OFF) && ((this->plt_boobytrap_frequency() > 0) 
               || this->plt_random_sequence() || (this->plt_random_sequence() > 0)))
