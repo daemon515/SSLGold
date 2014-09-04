@@ -6,21 +6,21 @@ If you want to use this:
 
 1. Download the binutils2.24.tar.gz from http://ftp.gnu.org/gnu/binutils/. [The gold modifications are based on 2.24 binutils version]
 
-2. We want to replace the gold folder in the downloaded binutils (e.g. binutils2.24/gold) and build with the modified version of the gold linker. Hence
+2. We want to replace the gold folder in the downloaded binutils (e.g. binutils2.24/gold) and build with the modified version of the gold linker. Follow the below sequence of steps
 
-git clone https://github.com/SajoSG/SSLGold.git
+$ git clone https://github.com/SajoSG/SSLGold.git
 
-rm -rf binutils2.24/gold
+$ rm -rf binutils2.24/gold
 
-mv SSLGold/gold binutils2.24
+$ mv SSLGold/gold binutils2.24
 
-cd binutils2.24
+$ cd binutils2.24
 
-./configure –prefix=$(specify_where_to_store_bins) –enable-gold –enable-plugins
+$ ./configure –prefix=$(specify_where_to_store_bins) –enable-gold –enable-plugins
 
-make
+$ make
 
-make install
+$ make install
 
 3. Use the ld.gold found in $(specify_where_to_store_bins)/bins as the default linker
 
