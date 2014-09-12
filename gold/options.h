@@ -1258,14 +1258,14 @@ class General_options
   DEFINE_string(fuse_ld, options::ONE_DASH, '\0', "",
 		N_("Ignored for GCC linker option compatibility"),
 		"");
-  DEFINE_uint(plt_random_size, options::TWO_DASHES, '\0', 0,
+  DEFINE_uint(plt_random_size, options::DASH_Z, '\0', 0,
 	      N_("SIZE by which to increase the size of a plt entry"), N_("SIZE"));
 
-  DEFINE_uint(plt_boobytrap_frequency, options::TWO_DASHES, '\0', 0,
-	      N_("Booby Traps inserted for every COUNT PLT entries"), N_("COUNT"));
+  DEFINE_uint(plt_boobytrap_frequency, options::DASH_Z, '\0', 0,
+	      N_("Booby Traps inserted for every COUNT plt entries"), N_("COUNT"));
 
   DEFINE_bool(plt_random_sequence, options::DASH_Z, '\0', false,
-	      N_("Randomize the PLT sequence order"), NULL);
+	      N_("Randomize the plt sequence order"), NULL);
   // The -z options.
 
   DEFINE_bool(combreloc, options::DASH_Z, '\0', true,
