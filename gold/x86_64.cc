@@ -1565,6 +1565,9 @@ Output_data_plt_x86_64_standard<size>::do_fill_first_plt_entry(
     typename elfcpp::Elf_types<size>::Elf_Addr got_address,
     typename elfcpp::Elf_types<size>::Elf_Addr plt_address)
 {
+  const unsigned char ud2_val[2] = {0x0F, 0x0B};
+  const unsigned char hlt_val[1] = {0xF4};
+
   memcpy(pov, first_plt_entry, plt_entry_size);
 
   // We do a jmp relative to the PC at the end of this instruction.
@@ -1574,6 +1577,18 @@ Output_data_plt_x86_64_standard<size>::do_fill_first_plt_entry(
   elfcpp::Swap<32, false>::writeval(pov + 8,
 				    (got_address + 16
 				     - (plt_address + 12)));
+
+  int plt_size = parameters->options().plt_random_size();
+  int i = 0;
+
+  while (i+2 <= plt_size){
+    memcpy(pov+plt_entry_size+i,ud2_val, 2);
+    i += 2;
+  }
+  if (i < plt_size){
+    memcpy(pov+plt_entry_size+i,hlt_val, 1);
+    i++;
+  }
 }
 
 // Subsequent entries in the PLT for an executable.
